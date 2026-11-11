@@ -2,6 +2,10 @@
 
 API de avaliações entre pessoas de uma empresa, com front-end em React. Todas as rotas são autenticadas pelo **Auth0**.
 
+- Front-end: https://sistema-avaliacoes.vercel.app
+- API: http://ec2-44-197-175-105.compute-1.amazonaws.com:8080/avaliacoes
+- Auth0: tenant `dev-luk1185ok6ie6gvy.us.auth0.com`, API `https://avaliacoes-api`, aplicação SPA `Avaliacoes Front`
+
 | Parte | Tecnologia | Onde roda |
 | --- | --- | --- |
 | Back-end | Spring Boot 4 (Java 21) + PostgreSQL | EC2 da AWS, via Docker Compose e deploy automático pelo GitHub Actions |
@@ -67,8 +71,9 @@ Arquivos principais do back-end, em `backend/src/main/java/br/edu/insper/avaliac
 
 ## Configuração do Auth0
 
-1. **Applications → APIs → Create API**: Name `Avaliacoes API`, Identifier `https://avaliacoes-api`, algoritmo RS256.
-2. **Applications → Applications → Create Application**: `Avaliacoes Front`, tipo **Single Page Application**. Em *Settings*, preencha *Allowed Callback URLs*, *Allowed Logout URLs* e *Allowed Web Origins* com `http://localhost:5173` e a URL da Vercel.
+1. **Applications → APIs → Create API**: Name `Avaliacoes API`, Identifier `https://avaliacoes-api`, algoritmo RS256. Em *Settings*, ligue **Allow Offline Access**, para o front poder usar refresh tokens.
+2. **Applications → Applications → Create Application**: `Avaliacoes Front`, tipo **Single Page Application**. Na aba *URLs*, preencha *Allowed Callback URLs*, *Allowed Logout URLs* e *Allowed Web Origins* com `http://localhost:5173` e a URL da Vercel.
+   - Se a API usar a política **Per-app authorization**, o padrão em tenants novos, abra a aplicação → aba **API Access** → `Avaliacoes API` → **Grant Access** em *User-Delegated Access*. Sem isso, o Auth0 não entrega token para a API.
 3. **User Management → Roles**: crie `ADMIN` e `USER`.
 4. **User Management → Users**: crie os usuários e atribua as roles em cada um, na aba *Roles*.
 5. **Actions → Library → Create Action**, trigger *Login / Post Login*, com o código abaixo. Depois clique em **Deploy** e, em **Actions → Triggers → post-login**, coloque a action no fluxo.
@@ -85,7 +90,18 @@ exports.onExecutePostLogin = async (event, api) => {
 };
 ```
 
-As roles só entram no token no próximo login. Depois de mudar a role de alguém, saia e entre de novo.
+As roles só entram em um token **novo**. Depois de mudar a role de alguém, clique em **Atualizar** no front, ou em "Já recebi uma role: atualizar permissões". Esses botões chamam `getAccessTokenSilently({ cacheMode: 'off' })`, que ignora o token em cache e pede outro ao Auth0. Sair e entrar de novo também funciona.
+
+### Testes feitos em produção
+
+| Cenário | Resultado |
+| --- | --- |
+| `GET /avaliacoes` sem token | `401` |
+| Login sem role | Front mostra "Sem permissão" |
+| ADMIN cadastra pelo front | `201`, avaliador = email do token |
+| ADMIN e USER listam | `200` |
+| USER faz `POST /avaliacoes` direto na API | `403` |
+| USER no front | Formulário de cadastro não aparece |
 
 ## Rodar localmente
 

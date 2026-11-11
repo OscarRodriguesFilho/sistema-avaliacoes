@@ -13,18 +13,21 @@ export default function App() {
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState(null)
 
-  const carregar = useCallback(async () => {
+  // renovarToken = true ignora o token em cache e pede um novo ao Auth0,
+  // para que roles atribuídas depois do login apareçam sem precisar sair e entrar.
+  const carregar = useCallback(async (renovarToken = false) => {
     setCarregando(true)
     setErro(null)
     try {
-      const token = await getAccessTokenSilently()
+      const token = await getAccessTokenSilently(renovarToken ? { cacheMode: 'off' } : undefined)
       const rolesAtuais = rolesDoToken(token)
       setRoles(rolesAtuais)
       if (rolesAtuais.includes('ADMIN') || rolesAtuais.includes('USER')) {
         setAvaliacoes(await listarAvaliacoes(token))
       }
     } catch (e) {
-      setErro(e.message)
+      const sessaoExpirada = ['login_required', 'missing_refresh_token', 'invalid_grant'].includes(e.error)
+      setErro(sessaoExpirada ? 'Sua sessão no Auth0 expirou. Clique em Sair e entre novamente.' : e.message)
     } finally {
       setCarregando(false)
     }
@@ -79,8 +82,9 @@ export default function App() {
             <h2>Sem permissão</h2>
             <p className="muted">
               Seu usuário não tem as roles <b>ADMIN</b> ou <b>USER</b> no Auth0. Peça para um administrador atribuir uma
-              role e faça login novamente.
+              role e depois clique no botão abaixo.
             </p>
+            <button className="primary" onClick={() => carregar(true)}>Já recebi uma role: atualizar permissões</button>
           </div>
         )}
 
@@ -92,7 +96,7 @@ export default function App() {
                 onCadastrada={(nova) => setAvaliacoes((lista) => [nova, ...lista])}
               />
             )}
-            <ListaAvaliacoes avaliacoes={avaliacoes} carregando={carregando} onAtualizar={carregar} />
+            <ListaAvaliacoes avaliacoes={avaliacoes} carregando={carregando} onAtualizar={() => carregar(true)} />
           </div>
         )}
       </main>
